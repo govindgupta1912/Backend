@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { logedOutUser, loginUser, registerUser } from "../controllers/user.controller.js";
+import { logedOutUser, loginUser, refreshAccessToken, registerUser } from "../controllers/user.controller.js";
 import {upload} from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -21,7 +21,9 @@ router.route("/login").post(loginUser);
 
 //secured routes
 router.route("/logout").post(verifyJWT, logedOutUser)
+router.route("/refresh-token").post(refreshAccessToken)
 export default router;
+
 
 // router.route("/register").post(...): This sets up a POST route for the /register endpoint. When a POST request
 //  is made to /register, the specified middleware and handler function will be executed.
