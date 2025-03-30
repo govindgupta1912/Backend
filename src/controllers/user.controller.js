@@ -127,7 +127,8 @@ const registerUser = asyncHandler(async (req, res) => {
     // Express.js does not natively handle multipart/form-data, which is the encoding type used for file uploads. 
     // Middleware like multer is used to parse this type of data and populate req.files with the uploaded file information.
     // This middleware processes the uploaded files and makes them accessible via req.files.
-
+   console.log("ps ",avatarLocalPath);
+   
 
     if (!avatarLocalPath) {
         throw new ApiError(400, "Avtar file is required")
@@ -299,4 +300,186 @@ const refreshAccessToken=asyncHandler(async(req,res)=>{
     }
 })
 
-export { registerUser,loginUser,logedOutUser,refreshAccessToken }
+const changePassword = asyncHandler(async(req,res)=>{
+
+    const {newpassword,oldpassword}=req.body
+
+    const user= await User.findById(req.loguser?._id)
+
+    const isPasswordCorrect= await user.isPasswordCorrect(oldpassword);
+
+    if(! isPasswordCorrect){
+         throw new ApiError(400,"Invalid old password")
+    }
+    user.password=newpassword
+    user.save({validateBeforeSave:false})
+
+    return res
+         .status(200)
+         .json(new ApiResponse(
+            200,
+            {},
+            "password change successfully"
+         ))
+})
+
+const updateAccountDetail = asyncHandler( async(req,res)=>{
+    const {fullName,email}=req.body;
+    if(!fullName||!email){
+        throw new ApiError(400,"all filed are required")
+    }
+    const user= await User.findByIdAndUpdate(
+              req.loguser?._id,
+              {
+                $set:{
+                    fullName,
+                    email:email
+                }
+              },
+              {
+                new:true
+              }
+    ).select("-password")
+
+    return res
+      .status(200)
+      .json( new ApiResponse(200,user,"Account detail updated succesfully"))
+})
+
+const updateUserAvtar = asyncHandler(async(req,res)=>{
+    const avatarLocalPath=req.file?.path
+
+    if (!avatarLocalPath) {
+
+        throw new ApiError(400,"avtar file is missing")
+    }
+
+    const avatar= await uploadOnCloudinary(avatarLocalPath);
+
+    if(!avatar)
+    {
+        throw new ApiError(400,"error while uploading avatr on cloudinary")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.loguser?._id,
+        {
+          $set:{ avatar:avatar.url}
+        },
+        {
+            new:true
+        }
+    ).select("-password")
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200,user,"avtar is updated sussecfully")
+        )
+})
+
+const updateUserCovaerImage = asyncHandler(async(req,res)=>{
+    const coverImageLocalPath=req.file?.path
+
+    if (!coverImageLocalPath) {
+
+        throw new ApiError(400,"coverImage file is missing")
+    }
+
+    const coverImage= await uploadOnCloudinary(coverImageLocalPath);
+
+    if(!coverImage)
+    {
+        throw new ApiError(400,"error while uploading coverImage on cloudinary")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.loguser?._id,
+        {
+          $set:{ coverImage:coverImage.url}
+        },
+        {
+            new:true
+        }
+    ).select("-password")
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200,user,"coverImage is updated sussecfully")
+        )
+})
+
+const userChannelProfile = asyncHandler(async(req,res)=>{
+
+    const {username}=req.params
+
+    if(!username?.trim()){
+        throw new ApiError(400,"usernmae is missing")
+    }
+
+    const channel = await User.aggregate([
+        {
+        $match:{
+            username:username?.toLowerCase()
+        },
+        },
+        {
+            $lookup:{
+                from:"subscriptions",
+                localField:"_id",
+                foreignField:"channel",
+                as:"subscribers"
+            }
+        },
+        {
+            $lookup:{
+                from:"subscriptions",
+                localField:"_id",
+                foreignField:"subscribe",
+                as:"subscribedTo"
+            }
+        },
+        {
+            $addFields:{
+                subcribersCount:{
+                    $size:"subscribers"
+                },
+                channelSubscribedToCount:{
+                    $size:"subscribedTo"
+                },
+                isSubscribed:{
+                     $cond:{
+                        if: {$in:[req.loguser?._id,"$subscibers.subscribe"]},
+                        // not understand subscribers.subscribe
+                        then:true,
+                        else:false
+                     }
+                }
+            }
+        },{
+            $project:{
+                fullName:1,
+                username:1,
+                subcribersCount:1,
+                channelSubscribedToCount:1,
+                isSubscribed:1,
+                email:1,
+                avatar:1,
+                coverImage:1
+            }
+        }
+    
+    ])
+
+    if(!channel?.length){
+        throw new ApiError(404,"channel does not exits")
+    }
+    console.log("channel_detail:-",channel);
+
+    return res
+          .status(200)
+          .json(new ApiResponse(200,channel[0],"user Channel fetched Successfully"))
+})
+export { registerUser,loginUser,logedOutUser,refreshAccessToken,changePassword,updateAccountDetail
+    ,updateUserAvtar,updateUserCovaerImage }
